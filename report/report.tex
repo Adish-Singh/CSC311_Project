@@ -1,0 +1,563 @@
+% =====================================================================
+% CSC311 Machine Learning Project -- Final Report
+%
+% Layout follows CSC311_Project_Report_Template_202609 (title page,
+% running header, Sections 1--6, references). The template's
+% instructions are kept as comments at the top of each section; the
+% guiding-question appendices (A, B) of the template are omitted.
+%
+% Sections 2 and 3 start from the proposal draft
+% (CSC311_Machine_Learning_Project__Proposal/proposal.tex). Update them
+% with the TA feedback and the final experiments, and turn the planned
+% (future-tense) methodology into what was actually done.
+%
+% Build: latexmk -pdf report.tex   (needs references.bib, figures/)
+% Submit as report.pdf.
+% =====================================================================
+\documentclass[11pt,letterpaper]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{XCharter}
+\usepackage[xcharter]{newtxmath}
+\usepackage[varqu]{zi4}
+\usepackage{parskip}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{enumitem}
+\usepackage{fancyhdr}
+\usepackage[hidelinks]{hyperref}
+
+\setlist{nosep}
+
+% ---------------------------------------------------------------------
+% Title-page information
+% ---------------------------------------------------------------------
+\newcommand{\projecttitle}{Exploration of Different Mochine Learning Models on Read-World Data} 
+\newcommand{\groupnumber}{Group 63376}
+\newcommand{\groupmembers}{Zhaoning Zhang, Luhan Ma, Adish Singh, Jingtian Hu}
+
+% ---------------------------------------------------------------------
+% Running header: "CSC311 Project Report" | group members
+% ---------------------------------------------------------------------
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{CSC311 Project Report}
+\fancyhead[R]{\groupmembers}
+\fancyfoot[C]{\thepage}
+\setlength{\headheight}{14pt}
+
+\begin{document}
+
+% =====================================================================
+% Title page
+% =====================================================================
+\begin{titlepage}
+  \centering
+  \vspace*{\fill}
+  {\large CSC311: Introduction to Machine Learning\par}
+  \vspace{2em}
+  {\large Project Report\par}
+  \vspace{1.5em}
+  {\itshape \projecttitle\par}
+  \vspace{6em}
+  Submitted by\par
+  \vspace{1em}
+  \groupnumber\par
+  \vspace{1em}
+  {\large \groupmembers\par}
+  \vspace{8em}
+  University of Toronto\par
+  Fall 2026\par
+  \vspace*{\fill}
+\end{titlepage}
+
+\setcounter{page}{1}
+
+% =====================================================================
+\section{Executive Summary}\label{sec:summary}
+% ---------------------------------------------------------------------
+% TEMPLATE INSTRUCTIONS
+% This section should be at most 1/4 page (1 paragraph).
+%   - Summarize the model families you explored (at least three).
+%   - State your best-performing model and its projected accuracy.
+%   - Provide a high-level justification of why this model
+%     outperformed the others.
+% ---------------------------------------------------------------------
+
+\textbf{TODO.} We compared multinomial logistic regression, a random forest, and
+a multilayer perceptron on survey responses describing three sports
+(Baseball, Basketball, Soccer). \emph{Best model}, \emph{projected test accuracy},
+and \emph{why it won}.
+
+% =====================================================================
+\section{Data Exploration}\label{sec:data-exploration}
+% ---------------------------------------------------------------------
+% TEMPLATE INSTRUCTIONS
+% This section of your report should be at most 2 pages.
+%
+% The goal of the Data Exploration step is to understand your dataset
+% well enough to decide how to prepare it and which models to try.
+%
+% Examine the type and distribution of every feature. Use your findings
+% to decide how to pre-process each feature, including normalizing,
+% encoding, and vectorizing the text.
+%
+% Look for patterns in the data, such as linear or nonlinear
+% relationships between the features and the label. These patterns help
+% you decide which model families are suitable.
+%
+% Determine which features appear predictive, so that you can justify
+% the models you choose in the Methodology section.
+%
+% Make sure to write down all of this reasoning. State which
+% transformations you applied and why, and explain what each plot and
+% table reveals.
+%
+% Rubric (2 marks): feature types, distributions, class balance (0.5);
+% missing values, outliers, inconsistencies and their handling (0.5);
+% preprocessing and its justification (0.5); how the test set was set
+% aside and never used during exploration (0.5).
+% ---------------------------------------------------------------------
+% Draft carried over from the proposal. All numbers are printed by
+% code.py (seed 311) and are computed on the training split only.
+
+\paragraph{Basic Overview.}
+The dataset has 870 responses from 290 students, each answering the same 12
+questions once per sport (290 rows per class). We split by student, not by row,
+because a student's three rows share an answering style and a row-level split
+would leak information. The id is not a feature: test ids never occur in
+training, so it could only help memorize individuals. Before exploring, we held
+out 15\% of students (44 students, 132 rows, seed 311;
+Appendix~\ref{app:test-ids}) as a test set. Everything below uses the remaining
+246 students (738 rows).
+
+\begin{table}[h]
+\centering\footnotesize
+\begin{tabular}{@{}llrl@{}}
+\toprule
+Feature & Type & Missing & Representation\\
+\midrule
+Ease of starting    & numeric 0--10         & 2       & standardized; median imputation      \\
+Strategy            & Likert (5 levels)     & 3       & ordinal 1--5, standardized           \\
+Injury risk         & Likert (5 levels)     & 2       & ordinal 1--5, standardized           \\
+Individual $>$ team & Likert (5 levels)     & 3       & ordinal 1--5, standardized           \\
+Where played        & multi-select (7)      & 2       & 7 binary indicators                  \\
+Season              & multi-select (4)      & 2       & 4 binary indicators                  \\
+Music               & multi-select (10)     & 2       & 10 binary indicators                 \\
+Food \& drink       & free text             & 15      & bag of words (120 tokens)            \\
+Colour              & free text             & 6       & bag of words (22 tokens)             \\
+Song                & free text             & 62 (81) & bag of words (145 tokens)            \\
+Feeling             & free text             & 3       & bag of words (178 tokens)            \\
+Price               & free text $\to$ number & 6 (32) & $\log(1+p)$, median imputation, flag \\
+\bottomrule
+\end{tabular}
+\caption{Features on the training split (738 rows). Missing = blank answers;
+parentheses include song placeholders and unparseable prices.}
+\label{tab:features}
+\end{table}
+
+\paragraph{Distributions and patterns.}
+Figure~\ref{fig:eda} compares the non-text features across sports.
+\textbf{(a)} Baseball is rated harder to start (mean 4.03) than Basketball (6.08)
+or Soccer (6.19), which separates Baseball but not Basketball from Soccer.
+\textbf{(b)} Likert answers show the same split: 28\% of Baseball responses agree
+that the injury risk is high, against about 70\% for the others; the
+``individual brilliance'' statement instead isolates Soccer (33\% agree versus
+65\% and 63\%).
+\textbf{(c)} Baseball has a lower median price (\$52.50 versus \$150 for Basketball
+and \$175 for Soccer), with heavy overlap.
+In the text fields, the most frequent tokens are class specific: colour
+(\emph{blue}/\emph{orange}/\emph{green} for Baseball/Basketball/Soccer), song
+(\emph{Take Me Out to the Ball Game}, Drake, \emph{Waka Waka}), and food
+(\emph{hot dogs} for Baseball, wings for Basketball). Feeling separates Baseball
+(\emph{bored} in 26\% of its rows versus \emph{excited} in 10\%) but not Basketball
+from Soccer (\emph{excited} in 37\% versus 40\%).
+
+\paragraph{Near-constant and correlated features.}
+A feature that is almost always the same tells the model little, and highly
+correlated features make a linear model's weights unstable. Neither is a problem
+here: every multi-select option is chosen in 3--92\% of rows, and the Likert and
+ease features are weakly correlated (Spearman $|\rho| \leq 0.33$). Only rare
+tokens are near-constant, and we drop them (see Preprocessing).
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.65\linewidth]{figures/eda.png}
+\caption{Training split, by sport. (a) Ease rating. (b) Share agreeing with each
+Likert statement. (c) Parsed ticket price on a $\log(1+p)$ scale.}
+\label{fig:eda}
+\end{figure}
+
+\paragraph{Missing values, outliers, and inconsistencies.}
+\begin{itemize}
+\item \textbf{Missing values:} rare (at most 6 rows per feature) except food (15)
+and song (62, 8.4\%), plus 19 song placeholders (``none'', ``idk'', ``-'') that we
+also count as missing. Song is likely skipped when none comes to mind. Missingness
+depends on the label: song is blank in 11\% of Baseball and Basketball rows but 3\%
+of Soccer rows, and food is never missing for Soccer. A missing answer is therefore
+a signal, so we keep it as an empty bag of words instead of imputing it.
+\item \textbf{Text fields:} normalizing capitalization, punctuation, and
+non-breaking spaces reduces 189 distinct colour answers to 122. Typos
+(\emph{exited} for \emph{excited}) remain, and 58--63\% of the tokens in each field
+occur only once; the rare-token filter in Preprocessing removes most of them.
+\item \textbf{Price:} 280 distinct strings mix units (``150CAD''), separators
+(``\$10\,000''), ranges, and sentences. Our regex parser reads 634 single
+numbers, 39 range midpoints, and 33 refusals (``Zero'') as \$0, and treats 26
+unparseable answers as missing. Price is right-skewed (median \$100, max
+\$10{,}000), so we apply $\log(1+p)$ rather than delete plausible answers,
+ignoring the small USD/CAD difference.
+\end{itemize}
+
+\paragraph{Preprocessing and its justification.}
+\begin{itemize}
+\item \textbf{Numeric and Likert:} median imputation; Likert answers become
+integers 1--5 rather than one-hot vectors because the levels are ordered and the
+class differences monotone (Figure~\ref{fig:eda}b). These and log-price are
+standardized to match the scale of the binary features under L2 regularization; a
+flag marks unparseable prices.
+\item \textbf{Multi-select:} one binary indicator per option (empty answer = all
+zeros). Treating each combination as a category would create 58, 13, and 99 sparse
+categories and hide shared options (82\% of responses listing Winter are
+Basketball).
+\item \textbf{Text:} normalize to lowercase, replace non-breaking spaces, strip
+punctuation, and remove a short stop-word list (\emph{and}, \emph{the}, \emph{by}
+were frequent in every class). Each field gets its own binary bag-of-words
+vocabulary, since the same word can mean different things in different questions.
+To limit the number of features relative to our 738 rows, tokens that appear in
+fewer than $m$ training rows are dropped, removing most typos and one-off answers.
+This section uses $m = 3$ (465 text features remain); $m$ is tuned in
+Section~\ref{sec:methodology}.
+\end{itemize}
+\textbf{No leakage:} all fitted quantities (medians, means, variances,
+vocabularies) come from the training data only, and from the training folds only
+inside cross-validation.
+
+% =====================================================================
+\section{Methodology}\label{sec:methodology}
+% ---------------------------------------------------------------------
+% TEMPLATE INSTRUCTIONS
+% This section of your report should be at most 3 pages.
+%
+% The goal of the Methodology step is to describe how you trained,
+% tuned, and evaluated your models in enough detail that a reader could
+% reproduce your results.
+%
+% Present the three model families you used and explain why each one
+% suits the dataset, drawing on what you found during data exploration.
+% Do not jump straight to a deep network, because a simpler model may
+% perform just as well and is easier to interpret.
+%
+% Make sure to describe how you trained each model so that your results
+% can be reproduced. State the optimizer (e.g., SGD or Adam), the
+% learning rate schedule if you used one, and any regularization or
+% early stopping. Briefly name the libraries you used and describe any
+% custom code you wrote.
+%
+% Explain how you split the data into training and validation sets, or
+% how you applied cross-validation, so that the reader can trust your
+% comparisons. Tune hyperparameters on a validation set that is separate
+% from the training data. Never use the test set for training, feature
+% engineering, or tuning.
+%
+% Summarize your hyperparameter tuning by stating which hyperparameters
+% you varied, how you chose the values to try, and which metric you used
+% to compare them. An exhaustive search is not required, but you should
+% show that your choices are reasonable.
+%
+% Be sure to tune every model family before you compare them. Choosing
+% the best model using default hyperparameters and then tuning only that
+% model is unfair to the other models, which might improve just as much
+% with tuning. This was the most common mistake we saw when grading
+% reports in previous semesters.
+%
+% Describe the evaluation metrics you used and justify each one. Report
+% at least one metric beyond accuracy, such as precision, recall, or F1,
+% because accuracy alone can hide poor performance on one of the
+% classes. Make sure every table and plot has appropriate labels and an
+% explanation of what it shows.
+%
+% Optionally, you may describe any additional techniques you tried, such
+% as feature engineering, clustering, or PCA.
+%
+% Rubric (4 marks): three model families and why they suit the data
+% (0.5); optimizer and training setup incl. regularization / early
+% stopping (0.5); train/validation split or CV setup (0.5);
+% hyperparameters, ranges, search strategy, evidence choices were
+% reasonable (1.0); all three models tuned before picking (0.5);
+% metrics incl. one beyond accuracy, with justification (1.0).
+% ---------------------------------------------------------------------
+% Draft carried over from the proposal (planned methodology). Rewrite in
+% the past tense once training.py has been run, and add the
+% hyperparameter-vs-validation-accuracy plots promised below.
+
+\paragraph{Model families and why they suit the data.}
+We compare three model families, chosen from the findings above and from the
+constraint that the final \texttt{pred.py} may use only NumPy and pandas. From our
+Data Exploration we expect the most predictive features to be ease of starting,
+injury-risk agreement, and the colour, song and food tokens.
+\begin{enumerate}
+\item \textbf{Multinomial logistic regression (LR)} \cite{bishop2006}. Our features
+are mostly sparse binary indicators and tokens, each of which shifts the evidence
+toward one class roughly independently (Section~\ref{sec:data-exploration}). A
+linear model is a natural fit, is interpretable through its weights, and is
+unlikely to overfit with L2 regularization on 738 rows. It is our baseline.
+\item \textbf{Random forest (RF)} \cite{hastie2009}. Class differences in our Data
+Exploration are threshold-like (Baseball has low ease ratings and low injury-risk
+agreement), and a missing song or food answer is itself informative. Trees split
+on these directly and can combine tokens (e.g.\ ``orange'' with ``wings'') without
+hand-built interactions. Averaging many trees reduces the high variance of a
+single tree.
+\item \textbf{Multilayer perceptron (MLP).} A one- or two-hidden-layer network can
+learn nonlinear combinations of all features, including dense word-embedding
+features. We include it to test whether extra capacity helps; given the small
+dataset, it requires strong regularization.
+\end{enumerate}
+
+\paragraph{Training setup.}
+Training uses Python with \texttt{numpy}, \texttt{scikit-learn}
+\cite{pedregosa2011}, and \texttt{pandas}; all random seeds are fixed to 311. The
+preprocessing of Section~\ref{sec:data-exploration} is implemented as a single
+pipeline that is refitted on the training portion of every split.
+\begin{itemize}
+\item \textbf{LR:} softmax output with cross-entropy loss and an L2 penalty of
+strength $1/C$, optimized with L-BFGS (scikit-learn's \texttt{lbfgs} solver) for
+up to 5000 iterations or until the gradient tolerance $10^{-4}$ is met. The loss is
+convex, so L-BFGS converges to the global minimum and no learning rate or early
+stopping is needed.
+\item \textbf{RF:} each tree is grown greedily on a bootstrap sample using the Gini
+impurity, considering a random subset of features at each split. There is no
+gradient-based optimizer; regularization comes from limiting depth and leaf size
+and from averaging the trees.
+\item \textbf{MLP:} ReLU hidden layers, softmax output, cross-entropy loss with L2
+weight penalty $\alpha$, optimized with Adam \cite{kingma2015} (scikit-learn
+defaults $\beta_1 = 0.9$, $\beta_2 = 0.999$) on mini-batches of 32 with a constant
+learning rate. For early stopping we hold out 10\% of the \emph{students} of the
+current training fold, train epoch by epoch (\texttt{partial\_fit}), stop after 20
+epochs without improvement in validation loss (maximum 500 epochs), and restore the
+weights from the best epoch. Holding out students rather than rows prevents the
+same leakage described in Section~\ref{sec:data-exploration}. When the final MLP is
+retrained on all training students, the same 10\% student holdout is used for early
+stopping.
+\end{itemize}
+
+\paragraph{Validation strategy.}
+The 44-student test set is untouched during this stage. On the 246 training
+students we run 5-fold cross-validation grouped by student (\texttt{GroupKFold} on
+\texttt{id} after shuffling the ids with seed 311): each fold holds out about 49
+students (about 147 rows), and the three rows of a student are always in the same
+fold. Because every student answers once per sport, each fold is exactly balanced
+across the three classes without explicit stratification. All models and all
+hyperparameter settings are evaluated on the \emph{same} five folds, so their
+scores are directly comparable. A setting's score is its mean validation metric
+over the five folds, and we also report the standard deviation across folds to
+show how much of a difference is noise.
+
+\paragraph{Hyperparameter search.}
+Table~\ref{tab:hparams} lists the hyperparameters and ranges. For LR we use a full
+grid search, since there are only two hyperparameters ($C$ and $m$; 24 settings).
+For RF and MLP we use random search with 60 sampled configurations each, which
+covers wide ranges at the same budget for both models (log-uniform sampling for
+$\alpha$ and the learning rate). The minimum token count $m$ is tuned jointly with
+each model because it controls the number of features. The selection criterion is
+mean cross-validated accuracy; when two settings are within one standard error of
+the best one (the standard deviation of the best setting's five fold scores divided
+by $\sqrt{5}$), we pick the simpler one (larger $1/C$, smaller forest or network).
+
+\begin{table}[h]
+\centering\small
+\begin{tabular}{@{}lll@{}}
+\toprule
+Model & Hyperparameter & Values / range\\
+\midrule
+All & min.\ token count $m$ & $\{2, 3, 5, 10\}$\\
+\midrule
+LR  & inverse regularization $C$ & $\{10^{-3}, 10^{-2}, \dots, 10^{2}\}$ (6 values, log grid)\\
+\midrule
+RF  & number of trees & $\{100, 200, 300, 500\}$\\
+    & max.\ depth & $\{5, 10, 15, 20, \text{none}\}$\\
+    & min.\ samples per leaf & $\{1, 2, 4, 8\}$\\
+    & features per split & $\{\sqrt{d},\ \log_2 d,\ 0.2d\}$\\
+\midrule
+MLP & hidden layers & $\{(32), (64), (128), (64, 32)\}$\\
+    & L2 penalty $\alpha$ & $[10^{-5}, 10^{-1}]$, log-uniform\\
+    & learning rate & $[10^{-4}, 10^{-2}]$, log-uniform\\
+\bottomrule
+\end{tabular}
+\caption{Hyperparameters and search ranges. $d$ is the number of input features.}
+\label{tab:hparams}
+\end{table}
+
+To show that the ranges are reasonable, we plot the mean validation accuracy (with
+a $\pm$1 standard deviation band) against the most important hyperparameter of each
+model ($C$ for LR, maximum depth for RF, $\alpha$ for the MLP), together with the
+training accuracy. We check that the best value lies inside the range, not at its
+edge (otherwise we extend the range), and use the gap between training and
+validation accuracy to judge under- or overfitting.
+% TODO: add the tuning-curve figure (one panel per model family).
+
+\paragraph{Fair comparison.}
+Every model family is tuned with the procedure above \emph{before} the families are
+compared. The comparison uses each family's best configuration and its
+cross-validated scores on the shared folds; we never pick a family based on its
+default hyperparameters.
+
+\paragraph{Additional experiment: text representation.}
+Because the test respondents may use words not seen in training, we compare two
+text representations for the tuned LR and MLP: (i) bag of words only, and
+(ii) bag of words plus, for each text field, the average of 50-dimensional GloVe
+vectors \cite{pennington2014} (\texttt{glove.6B.50d}) of its tokens, with unknown
+tokens skipped and an all-zero vector if no token is known. To meet the 10\,MB
+submission limit, we keep the vectors of the 20{,}000 most frequent English words,
+stored as 16-bit floats (about 2\,MB). Representation (ii) is kept only if it
+improves cross-validated accuracy beyond one standard error.
+% TODO: drop this paragraph if the experiment was not run.
+
+\paragraph{Evaluation metrics.}
+\begin{itemize}
+\item \textbf{Accuracy} is the main selection metric. The classes are exactly
+balanced, so accuracy is not biased toward a majority class, and it is the
+quantity on which the test set is graded.
+\item \textbf{Macro-averaged F1, with per-class precision and recall.} Accuracy can
+hide one weak class. Section~\ref{sec:data-exploration} suggests that Basketball
+and Soccer are harder to separate from each other than from Baseball (similar ease
+ratings and Likert answers), so we track per-class recall to detect this.
+\item \textbf{Confusion matrix} of the pooled out-of-fold predictions, to identify
+the most common misclassifications and inspect examples of them.
+\end{itemize}
+All metrics are reported as mean $\pm$ standard deviation over the five folds.
+
+\paragraph{Final model and test estimate.}
+We select the family and configuration with the best cross-validated accuracy,
+using the one-standard-error rule in favour of the simpler model. We then retrain
+it on all 738 training rows and evaluate it exactly once on the 132-row test set.
+After this single evaluation, we retrain the chosen configuration on all 870 rows
+for \texttt{pred.py}. We export the fitted preprocessing (medians, means and
+variances, vocabularies) and model parameters (LR or MLP weight matrices, or the RF
+trees as arrays of split features, thresholds, child indices, and leaf class
+probabilities) to a compressed \texttt{.npz} file, with the vocabularies in a small
+\texttt{.json} file, and reimplement the prediction step in NumPy. We verify that it
+reproduces the trained model's predictions exactly on the validation folds.
+
+% =====================================================================
+\section{Results}\label{sec:results}
+% ---------------------------------------------------------------------
+% TEMPLATE INSTRUCTIONS
+% This section should be at most 1 page.
+%
+% The goal of the Results step is to show how well your models
+% performed, explain which model you chose, and predict how it will do
+% on the unseen test set.
+%
+% Report the results of every model using the evaluation metrics you
+% described in the Methodology section. Present them in tables or plots
+% that make the comparison easy to read.
+%
+% Compare performance across the three model families, and state clearly
+% which model you chose as your final model. This must be the model
+% implemented in your prediction script.
+%
+% Analyze the errors your models make. Describe the common
+% misclassifications or weaknesses you observed, and include a confusion
+% matrix or a few illustrative examples if they help.
+%
+% Estimate your final model's accuracy on the unseen test set as a
+% single number. A range will earn no marks. Make sure to support your
+% estimate with empirical evidence, such as validation results, the
+% stability of your cross-validation scores, learning curves, or
+% consistency across random seeds or folds.
+%
+% Rubric (2 marks): metrics in clear tables/plots, family comparison,
+% final choice (1.0); common misclassifications via confusion matrix or
+% examples (0.5); single-number test estimate justified by evidence
+% (0.5).
+% ---------------------------------------------------------------------
+
+\paragraph{Model comparison.}
+Table~\ref{tab:results} reports each family's best configuration on the five
+grouped cross-validation folds. \textbf{TODO:} state the final model and why.
+
+\begin{table}[h]
+\centering\small
+\begin{tabular}{@{}lcccccc@{}}
+\toprule
+& & & & \multicolumn{3}{c}{CV recall}\\
+\cmidrule(l){5-7}
+Model & Train acc. & CV acc. & CV macro-F1 & Baseball & Basketball & Soccer\\
+\midrule
+LR  & -- & -- $\pm$ -- & -- $\pm$ -- & -- & -- & --\\
+RF  & -- & -- $\pm$ -- & -- $\pm$ -- & -- & -- & --\\
+MLP & -- & -- $\pm$ -- & -- $\pm$ -- & -- & -- & --\\
+\bottomrule
+\end{tabular}
+\caption{Best configuration of each model family, mean $\pm$ standard deviation
+over the five grouped CV folds (246 training students).}
+\label{tab:results}
+\end{table}
+
+\paragraph{Error analysis.}
+\textbf{TODO:} confusion matrix of the pooled out-of-fold predictions of the final
+model, the most common confusions (expected: Basketball vs.\ Soccer), and one or two
+illustrative misclassified responses.
+
+\paragraph{Estimated test accuracy.}
+\textbf{TODO:} a single number, e.g.\ ``We expect an accuracy of \textbf{XX\%} on the
+unseen test set,'' supported by the held-out 132-row test accuracy, the fold-to-fold
+spread, and the gap between training and validation accuracy. Note that the real
+test set is written by TAs and instructors rather than students.
+
+% =====================================================================
+\section{Contributions and Learning}\label{sec:contributions}
+% ---------------------------------------------------------------------
+% TEMPLATE INSTRUCTIONS
+% This section should contain a list of 3--4 bullets, one for each
+% student. Each student should write at most three sentences describing
+% their main contributions and the most important lesson learned.
+% ---------------------------------------------------------------------
+
+\begin{itemize}
+\item \textbf{Zhaoning Zhang:} TODO.
+\item \textbf{Luhan Ma:} TODO.
+\item \textbf{Adish Singh:} TODO.
+\item \textbf{Jingtian Hu:} TODO.
+\end{itemize}
+
+% =====================================================================
+\section*{Use of AI Tools}
+% Not part of the template; kept from the proposal because the course
+% asks us to declare AI use.
+
+\textbf{TODO:} describe which AI tools were used, for what, and that every change
+was reviewed by the team.
+
+% =====================================================================
+\section{References}\label{sec:references}
+% ---------------------------------------------------------------------
+% TEMPLATE INSTRUCTIONS
+% Use references whenever appropriate (e.g., when you consult textbooks,
+% research papers, online tutorials, or external code). Cite in the text
+% using \cite{}. Entries live in references.bib.
+% ---------------------------------------------------------------------
+
+\renewcommand{\refname}{\vspace{-2.5em}} % heading is given by the section above
+\bibliographystyle{plain}
+\bibliography{references}
+
+% =====================================================================
+\appendix
+\section{Held-out Test Set}\label{app:test-ids}
+The test set consists of the following 44 student ids (132 rows), drawn uniformly
+at random without replacement from ids 1--290 with
+\texttt{numpy.random.default\_rng(311)}. The training set consists of the other
+246 ids (738 rows).
+
+\medskip
+\noindent\small
+6, 13, 15, 16, 17, 18, 22, 31, 35, 38, 42, 49, 58, 69, 77, 82, 84, 87, 90, 94, 103,
+113, 119, 141, 152, 158, 162, 168, 178, 180, 190, 200, 206, 218, 258, 261, 262, 266,
+276, 279, 281, 282, 283, 287.
+\normalsize
+
+\end{document}
